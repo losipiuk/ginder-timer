@@ -10,21 +10,42 @@ const int RESET_BTN_PIM = A1;
 const int UP_BTN_PIN = A2;
 const int DOWN_BTN_PIN = A3;
 
-TM1637 tm1637(LCD_CLK, LCD_DIO);
-
 const int STATE_READY = 1;
 const int STATE_RUNNING = 2;
 const int STATE_PAUSED = 3;
 
+const int BUTTON_PRESSED = LOW;
+const int BUTTON_RELEASED = HIGH;
+
+const long TIMER_PRESET_DEFAULT = 5000;
+const long TIMER_PRESET_MIN = 1000;
+const long TIMER_PRESET_MAX = 60000;
+const long TIMER_PRESET_DELTA = 500;
+
 int state = STATE_READY;
-long timerPreset = 15000;
+long timerPreset = TIMER_PRESET_DEFAULT;
 long timerStart;
 long timerRemaining;
 
+// UI objects
+TM1637 tm1637(LCD_CLK, LCD_DIO);
+ezButton grindButton(GRIND_BTN_PIN);
+ezButton resetButton(RESET_BTN_PIM);
+ezButton upButton(UP_BTN_PIN);
+ezButton downButton(DOWN_BTN_PIN);
+
 void setup() {
-    tm1637.init();
-    tm1637.set(BRIGHT_TYPICAL);
-    tm1637.point(1);
+  // serial console for debugging
+  Serial.begin(9600);
+
+  tm1637.init();
+  tm1637.set(BRIGHT_TYPICAL);
+  tm1637.point(1);
+
+  grindButton.setDebounceTime(50);
+  resetButton.setDebounceTime(50);
+  upButton.setDebounceTime(50);
+  downButton.setDebounceTime(50);
 }
 
 void displayTime(long timeMillis) {
@@ -33,25 +54,67 @@ void displayTime(long timeMillis) {
 }
 
 void handleReady() {
-  timerRemaining = timerPreset;
-  timerStart = millis();
-  state = STATE_RUNNING;
+  displayTime(timerPreset);
+  if (grindButton.isPressed()) {
+    timerRemaining = timerPreset;
+    timerStart = millis();
+    state = STATE_RUNNING;
+    return;
+  }
+  if (upButton.isPressed()) {
+    Serial.println("up!");
+    timerPreset = timerPreset + TIMER_PRESET_DELTA;
+    if (timerPreset > TIMER_PRESET_MAX) {
+      timerPreset = TIMER_PRESET_MAX;
+    }
+    return;
+  }
+  if (downButton.isPressed()) {
+    timerPreset = timerPreset - TIMER_PRESET_DELTA;
+    if (timerPreset < TIMER_PRESET_MIN) {
+      timerPreset = TIMER_PRESET_MIN;
+    }
+  }
+
 }
 
 void handleRunning() {
   long currentRemaining = timerRemaining - (millis() - timerStart);
+  displayTime(currentRemaining);
   if (currentRemaining <= 0) {
     state = STATE_READY;
     return;
   }
-  displayTime(currentRemaining);
+  if (grindButton.getState() == BUTTON_RELEASED) {
+    state = STATE_PAUSED;
+    timerRemaining = currentRemaining;
+    return;
+  }
 }
 
 void handlePaused() {
+  displayTime(timerRemaining);
+  if (resetButton.isPressed()) {
+    state = STATE_READY;
+    return;
+  }
+  if (grindButton.isPressed()) {
+    timerStart = millis();
+    state = STATE_RUNNING;
+    return;
+  }
+}
 
+void buttonsLoop() {
+  grindButton.loop();
+  resetButton.loop();
+  upButton.loop();
+  downButton.loop();
 }
 
 void loop() {
+  buttonsLoop();
+
   switch (state) {
   case STATE_READY:
     handleReady();
