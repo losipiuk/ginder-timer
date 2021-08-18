@@ -19,7 +19,3 @@ updateLib() {
 }
 
 updateLib Seeed-Studio/Grove_4Digital_Display master TM1637.h TM1637.cpp
-updateLib ArduinoGetStarted/button master src/ezButton.h src/ezButton.cpp
-
-# do some patching :)
-sed -i 's/#include <ezButton.h>/#include "ezButton.h"/' ${LIBS_FOLDER}/ezButton.cpp

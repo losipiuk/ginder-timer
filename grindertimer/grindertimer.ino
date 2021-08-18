@@ -1,5 +1,6 @@
 #include "TM1637.h"
-#include "ezButton.h"
+#include <AceButton.h>
+using namespace ace_button;
 
 // Pins definitions for TM1637 and can be changed to other ports
 const int LCD_CLK = SCL;
@@ -29,10 +30,15 @@ long timerRemaining;
 
 // UI objects
 TM1637 tm1637(LCD_CLK, LCD_DIO);
-ezButton grindButton(GRIND_BTN_PIN);
-ezButton resetButton(RESET_BTN_PIM);
-ezButton upButton(UP_BTN_PIN);
-ezButton downButton(DOWN_BTN_PIN);
+
+ButtonConfig noRepeatButtonConfig;
+ButtonConfig repeatButtonConfig;
+
+AceButton grindButton(&noRepeatButtonConfig);
+AceButton resetButton(&noRepeatButtonConfig);
+AceButton upButton(&repeatButtonConfig);
+AceButton downButton(&repeatButtonConfig);
+void handleButtonEvent(AceButton*, uint8_t, uint8_t);
 
 void setup() {
   // serial console for debugging
@@ -42,10 +48,24 @@ void setup() {
   tm1637.set(BRIGHT_TYPICAL);
   tm1637.point(1);
 
-  grindButton.setDebounceTime(50);
-  resetButton.setDebounceTime(50);
-  upButton.setDebounceTime(50);
-  downButton.setDebounceTime(50);
+  pinMode(GRIND_BTN_PIN, INPUT_PULLUP);
+  pinMode(RESET_BTN_PIM, INPUT_PULLUP);
+  pinMode(UP_BTN_PIN, INPUT_PULLUP);
+  pinMode(DOWN_BTN_PIN, INPUT_PULLUP);
+
+  // setup button configs
+  noRepeatButtonConfig.setEventHandler(handleButtonEvent);
+  noRepeatButtonConfig.setDebounceDelay(50);
+  repeatButtonConfig.setEventHandler(handleButtonEvent);
+  repeatButtonConfig.setFeature(ButtonConfig::kFeatureRepeatPress);
+  repeatButtonConfig.setDebounceDelay(50);
+
+  // setup buttons
+  grindButton.init(GRIND_BTN_PIN);
+  resetButton.init(RESET_BTN_PIM);
+  upButton.init(UP_BTN_PIN);
+  downButton.init(DOWN_BTN_PIN);
+
 }
 
 void displayTime(long timeMillis) {
@@ -55,61 +75,64 @@ void displayTime(long timeMillis) {
 
 void handleReady() {
   displayTime(timerPreset);
-  if (grindButton.isPressed()) {
-    timerRemaining = timerPreset;
-    timerStart = millis();
-    state = STATE_RUNNING;
-    return;
-  }
-  if (upButton.isPressed()) {
-    Serial.println("up!");
-    timerPreset = timerPreset + TIMER_PRESET_DELTA;
-    if (timerPreset > TIMER_PRESET_MAX) {
-      timerPreset = TIMER_PRESET_MAX;
-    }
-    return;
-  }
-  if (downButton.isPressed()) {
-    timerPreset = timerPreset - TIMER_PRESET_DELTA;
-    if (timerPreset < TIMER_PRESET_MIN) {
-      timerPreset = TIMER_PRESET_MIN;
-    }
-  }
-
 }
 
 void handleRunning() {
   long currentRemaining = timerRemaining - (millis() - timerStart);
-  displayTime(currentRemaining);
   if (currentRemaining <= 0) {
     state = STATE_READY;
     return;
   }
-  if (grindButton.getState() == BUTTON_RELEASED) {
-    state = STATE_PAUSED;
-    timerRemaining = currentRemaining;
-    return;
-  }
+  displayTime(currentRemaining);
 }
 
 void handlePaused() {
   displayTime(timerRemaining);
-  if (resetButton.isPressed()) {
-    state = STATE_READY;
-    return;
-  }
-  if (grindButton.isPressed()) {
-    timerStart = millis();
-    state = STATE_RUNNING;
-    return;
-  }
 }
 
 void buttonsLoop() {
-  grindButton.loop();
-  resetButton.loop();
-  upButton.loop();
-  downButton.loop();
+  grindButton.check();
+  resetButton.check();
+  upButton.check();
+  downButton.check();
+}
+
+void handleButtonEvent(AceButton* button, uint8_t eventType, uint8_t buttonState) {
+  switch (eventType) {
+    case AceButton::kEventPressed:
+    case AceButton::kEventRepeatPressed:
+      if (button->getPin() == UP_BTN_PIN && state == STATE_READY) {
+        timerPreset = timerPreset + TIMER_PRESET_DELTA;
+        if (timerPreset > TIMER_PRESET_MAX) {
+          timerPreset = TIMER_PRESET_MAX;
+        }
+      }
+      if (button->getPin() == DOWN_BTN_PIN && state == STATE_READY) {
+        timerPreset = timerPreset - TIMER_PRESET_DELTA;
+        if (timerPreset < TIMER_PRESET_MIN) {
+          timerPreset = TIMER_PRESET_MIN;
+        }
+      }
+      if (button->getPin() == RESET_BTN_PIM && state == STATE_PAUSED) {
+        state = STATE_READY;
+      }
+      if (button->getPin() == GRIND_BTN_PIN && state == STATE_PAUSED) {
+        timerStart = millis();
+        state = STATE_RUNNING;
+      }
+      if (button->getPin() == GRIND_BTN_PIN && state == STATE_READY) {
+        timerRemaining = timerPreset;
+        timerStart = millis();
+        state = STATE_RUNNING;
+      }
+      break;
+    case AceButton::kEventReleased:
+      if (button->getPin() == GRIND_BTN_PIN && state == STATE_RUNNING) {
+        state = STATE_PAUSED;
+        timerRemaining = timerRemaining - (millis() - timerStart);
+      }
+      break;
+  }
 }
 
 void loop() {
