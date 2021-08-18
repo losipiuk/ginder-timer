@@ -5,10 +5,10 @@
 const int LCD_CLK = SCL;
 const int LCD_DIO = SDA;
 
-const int GRIND_BTN_PIN = A0;
-const int RESET_BTN_PIM = A1;
-const int UP_BTN_PIN = A2;
-const int DOWN_BTN_PIN = A3;
+const int GRIND_BTN_PIN = 5;
+const int RESET_BTN_PIM = 4;
+const int UP_BTN_PIN = 3;
+const int DOWN_BTN_PIN = 2;
 
 const int STATE_READY = 1;
 const int STATE_RUNNING = 2;
