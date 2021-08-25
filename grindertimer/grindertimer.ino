@@ -11,6 +11,8 @@ const int RESET_BTN_PIM = 4;
 const int UP_BTN_PIN = 3;
 const int DOWN_BTN_PIN = 2;
 
+const int GRINDER_RELAY_PIN = 6;
+
 const int STATE_READY = 1;
 const int STATE_RUNNING = 2;
 const int STATE_PAUSED = 3;
@@ -52,6 +54,7 @@ void setup() {
   pinMode(RESET_BTN_PIM, INPUT_PULLUP);
   pinMode(UP_BTN_PIN, INPUT_PULLUP);
   pinMode(DOWN_BTN_PIN, INPUT_PULLUP);
+  pinMode(GRINDER_RELAY_PIN, OUTPUT);
 
   // setup button configs
   noRepeatButtonConfig.setEventHandler(handleButtonEvent);
@@ -74,6 +77,7 @@ void displayTime(long timeMillis) {
 }
 
 void handleReady() {
+  setGrinder(false);
   displayTime(timerPreset);
 }
 
@@ -83,10 +87,12 @@ void handleRunning() {
     state = STATE_READY;
     return;
   }
+  setGrinder(true);
   displayTime(currentRemaining);
 }
 
 void handlePaused() {
+  setGrinder(false);
   displayTime(timerRemaining);
 }
 
@@ -118,6 +124,7 @@ void handleButtonEvent(AceButton* button, uint8_t eventType, uint8_t buttonState
       }
       if (button->getPin() == GRIND_BTN_PIN && state == STATE_PAUSED) {
         timerStart = millis();
+        setGrinder(true);
         state = STATE_RUNNING;
       }
       if (button->getPin() == GRIND_BTN_PIN && state == STATE_READY) {
@@ -129,10 +136,15 @@ void handleButtonEvent(AceButton* button, uint8_t eventType, uint8_t buttonState
     case AceButton::kEventReleased:
       if (button->getPin() == GRIND_BTN_PIN && state == STATE_RUNNING) {
         state = STATE_PAUSED;
+        setGrinder(false);
         timerRemaining = timerRemaining - (millis() - timerStart);
       }
       break;
   }
+}
+
+void setGrinder(bool enabled) {
+  digitalWrite(GRINDER_RELAY_PIN, enabled ? LOW : HIGH);
 }
 
 void loop() {
